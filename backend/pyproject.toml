@@ -1,0 +1,28 @@
+[tool.poetry]
+name = "gold-price-backend"
+version = "0.1.0"
+description = "FastAPI backend for the Gold Price collector service."
+authors = ["Your Name <you@example.com>"]
+license = "MIT"
+readme = "README.md"
+packages = [{ include = "app" }]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = "^0.110.0"
+uvicorn = { extras = ["standard"], version = "^0.27.1" }
+sqlalchemy = "^2.0.27"
+psycopg = { extras = ["binary"], version = "^3.1.19" }
+httpx = "^0.26.0"
+pydantic = "^1.10.14"
+python-dotenv = "^1.0.1"
+
+[tool.poetry.group.dev.dependencies]
+black = "^24.2.0"
+isort = "^5.13.2"
+mypy = "^1.8.0"
+
+[build-system]
+requires = ["poetry-core>=1.6.0"]
+build-backend = "poetry.core.masonry.api"
+
