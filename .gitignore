@@ -67,4 +67,5 @@ Thumbs.db
 backend/.env
 frontend/.env
 
+# Archive Folder
 archive/
