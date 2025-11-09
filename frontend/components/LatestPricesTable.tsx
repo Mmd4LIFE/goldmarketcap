@@ -46,6 +46,25 @@ function getLogoPath(source: string): string {
   return `/logos/${source.toLowerCase()}.${ext}`;
 }
 
+// Helper function to get website URL for a source
+function getSourceUrl(source: string): string {
+  const urls: Record<string, string> = {
+    tgju: "https://www.tgju.org/",
+    wallgold: "https://wallgold.ir/app",
+    technogold: "https://technogold.gold/",
+    estjt: "https://www.estjt.ir/",
+    digikala: "https://www.digikala.com/wealth/my-assets/",
+    goldika: "https://goldika.ir/",
+    milli: "https://milli.gold/",
+    taline: "https://taline.ir/",
+    talasea: "https://talasea.ir/",
+    daric: "https://daric.gold/",
+    melligold: "https://melligold.com/",
+  };
+  
+  return urls[source.toLowerCase()] || "#";
+}
+
 export function LatestPricesTable({ data, isLoading, error }: LatestPricesTableProps) {
 
   // Aggregate sources and calculate averages - MUST be before any conditional returns
@@ -170,7 +189,7 @@ export function LatestPricesTable({ data, isLoading, error }: LatestPricesTableP
               <th scope="col" className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider text-slate-300">
                 Rank Δ
               </th>
-              <th scope="col" className="px-6 py-4 text-center text-xs font-bold uppercase tracking-wider text-slate-300">
+              <th scope="col" className="px-3 py-4 text-center text-xs font-bold uppercase tracking-wider text-slate-300">
                 Rank
               </th>
               <th scope="col" className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-300">
@@ -209,11 +228,16 @@ export function LatestPricesTable({ data, isLoading, error }: LatestPricesTableP
                     )}
                     {source.rankChange === 0 && <span className="text-slate-600">=</span>}
                   </td>
-                  <td className="px-6 py-4 text-center">
+                  <td className="px-3 py-4 text-center">
                     <span className="text-lg font-bold text-slate-400">#{rank}</span>
                   </td>
                   <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
+                    <a 
+                      href={getSourceUrl(source.source)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-3 transition-opacity hover:opacity-70"
+                    >
                       <div className="relative h-8 w-8 flex-shrink-0 overflow-hidden rounded-lg bg-white/5 p-1">
                         <Image
                           src={getLogoPath(source.source)}
@@ -223,8 +247,8 @@ export function LatestPricesTable({ data, isLoading, error }: LatestPricesTableP
                           className="h-full w-full object-contain"
                         />
                       </div>
-                      <span className="text-sm font-bold uppercase text-emerald-400">{source.source}</span>
-                    </div>
+                      <span className="text-sm font-bold uppercase text-slate-400">{source.source}</span>
+                    </a>
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
