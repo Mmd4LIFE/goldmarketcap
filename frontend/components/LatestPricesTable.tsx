@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import { createPortal } from "react-dom";
 import Image from "next/image";
 import { LatestPricesResponse, PriceRecord } from "../lib/api";
 
@@ -25,6 +26,10 @@ interface AggregatedSource {
   timestamp: string;
   priceDirection: "up" | "down" | "none";
   rankChange: number;
+  sparkline7d: number[];
+  change1h?: number;
+  change24h?: number;
+  change7d?: number;
 }
 
 // Helper function to get logo path for a source
@@ -66,8 +71,53 @@ function getSourceUrl(source: string): string {
   return urls[source.toLowerCase()] || "#";
 }
 
+// Sparkline component
+function Sparkline({ data, priceDirection, className = "" }: { data: number[]; priceDirection?: "up" | "down" | "none"; className?: string }) {
+  if (!data || data.length === 0) {
+    return <div className={`flex items-center justify-center text-slate-600 ${className}`}>—</div>;
+  }
+
+  const width = 120;
+  const height = 40;
+  const padding = 2;
+  
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+  const range = max - min || 1;
+  
+  const points = data.map((value, index) => {
+    const x = padding + (index / (data.length - 1)) * (width - 2 * padding);
+    const y = height - padding - ((value - min) / range) * (height - 2 * padding);
+    return `${x},${y}`;
+  }).join(" ");
+  
+  // Use same color logic as price
+  let color = "#94a3b8"; // slate-400 for "none"
+  if (priceDirection === "up") {
+    color = "#10b981"; // emerald-400
+  } else if (priceDirection === "down") {
+    color = "#ef4444"; // red-400
+  }
+  
+  return (
+    <svg width={width} height={height} className={className}>
+      <polyline
+        fill="none"
+        stroke={color}
+        strokeWidth="2"
+        points={points}
+      />
+    </svg>
+  );
+}
+
 export function LatestPricesTable({ data, isLoading, error }: LatestPricesTableProps) {
   const router = useRouter();
+  const [headerContainer, setHeaderContainer] = useState<HTMLElement | null>(null);
+
+  useEffect(() => {
+    setHeaderContainer(document.getElementById("last-update-container"));
+  }, []);
 
   // Aggregate sources and calculate averages - MUST be before any conditional returns
   const aggregatedSources = useMemo<AggregatedSource[]>(() => {
@@ -119,6 +169,10 @@ export function LatestPricesTable({ data, isLoading, error }: LatestPricesTableP
       const trackingRecord = buyRecord || sellRecord || defaultRecord;
       const priceDirection = (trackingRecord?.price_direction || "none") as "up" | "down" | "none";
       const rankChange = trackingRecord?.rank_change || 0;
+      const sparkline7d = (trackingRecord?.sparkline_7d || []) as number[];
+      const change1h = trackingRecord?.change_1h;
+      const change24h = trackingRecord?.change_24h;
+      const change7d = trackingRecord?.change_7d;
 
       sources.push({
         source,
@@ -129,6 +183,10 @@ export function LatestPricesTable({ data, isLoading, error }: LatestPricesTableP
         timestamp,
         priceDirection,
         rankChange,
+        sparkline7d,
+        change1h,
+        change24h,
+        change7d,
       });
     });
 
@@ -174,21 +232,22 @@ export function LatestPricesTable({ data, isLoading, error }: LatestPricesTableP
   }
 
   return (
-    <div className="space-y-3">
-      {latestTimestamp && (
-        <div className="flex items-center justify-end gap-2 text-sm">
+    <>
+      {latestTimestamp && headerContainer && createPortal(
+        <div className="flex items-center gap-2 text-sm">
           <svg className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           <span className="text-slate-400">Last Update: <span className="font-medium text-slate-300">{latestTimestamp}</span></span>
-        </div>
+        </div>,
+        headerContainer
       )}
       
       <div className="overflow-hidden rounded-lg border border-slate-700/50 bg-gradient-to-br from-slate-900/90 to-slate-900/50 shadow-xl backdrop-blur-sm">
         <table className="min-w-full divide-y divide-slate-700/50">
           <thead className="bg-slate-950/80">
             <tr>
-              <th scope="col" className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider text-slate-300">
+              <th scope="col" className="w-16 px-2 py-4 text-center text-xs font-bold uppercase tracking-wider text-slate-300">
                 Rank Δ
               </th>
               <th scope="col" className="w-16 px-2 py-4 text-center text-xs font-bold uppercase tracking-wider text-slate-300">
@@ -200,8 +259,17 @@ export function LatestPricesTable({ data, isLoading, error }: LatestPricesTableP
               <th scope="col" className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider text-slate-300">
                 Price (Toman)
               </th>
+              <th scope="col" className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider text-slate-300">
+                1h %
+              </th>
+              <th scope="col" className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider text-slate-300">
+                24h %
+              </th>
+              <th scope="col" className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider text-slate-300">
+                7d %
+              </th>
               <th scope="col" className="px-6 py-4 text-center text-xs font-bold uppercase tracking-wider text-slate-300">
-                Change
+                Last 7 Days
               </th>
             </tr>
           </thead>
@@ -215,7 +283,7 @@ export function LatestPricesTable({ data, isLoading, error }: LatestPricesTableP
                   onClick={() => router.push(`/chart/${source.source.toLowerCase()}`)}
                   className="cursor-pointer transition-all duration-300 hover:bg-slate-800/30"
                 >
-                  <td className="px-4 py-4 text-center">
+                  <td className="w-16 px-2 py-4 text-center">
                     {source.rankChange > 0 && (
                       <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-2 py-1 text-xs font-bold text-emerald-400">
                         <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -291,18 +359,35 @@ export function LatestPricesTable({ data, isLoading, error }: LatestPricesTableP
                       </span>
                     </div>
                   </td>
+                  <td className="px-4 py-4 text-center">
+                    {source.change1h !== undefined && source.change1h !== null ? (
+                      <span className={`text-sm font-semibold ${source.change1h >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {source.change1h >= 0 ? '▲' : '▼'} {Math.abs(source.change1h).toFixed(2)}%
+                      </span>
+                    ) : (
+                      <span className="text-slate-600">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-4 text-center">
+                    {source.change24h !== undefined && source.change24h !== null ? (
+                      <span className={`text-sm font-semibold ${source.change24h >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {source.change24h >= 0 ? '▲' : '▼'} {Math.abs(source.change24h).toFixed(2)}%
+                      </span>
+                    ) : (
+                      <span className="text-slate-600">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-4 text-center">
+                    {source.change7d !== undefined && source.change7d !== null ? (
+                      <span className={`text-sm font-semibold ${source.change7d >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {source.change7d >= 0 ? '▲' : '▼'} {Math.abs(source.change7d).toFixed(2)}%
+                      </span>
+                    ) : (
+                      <span className="text-slate-600">—</span>
+                    )}
+                  </td>
                   <td className="px-6 py-4 text-center">
-                    {source.priceDirection === "up" && (
-                      <svg className="inline h-6 w-6 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 10l7-7m0 0l7 7m-7-7v18" />
-                      </svg>
-                    )}
-                    {source.priceDirection === "down" && (
-                      <svg className="inline h-6 w-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                      </svg>
-                    )}
-                    {source.priceDirection === "none" && <span className="text-slate-600">—</span>}
+                    <Sparkline data={source.sparkline7d} priceDirection={source.priceDirection} />
                   </td>
                 </tr>
               );
@@ -310,7 +395,7 @@ export function LatestPricesTable({ data, isLoading, error }: LatestPricesTableP
           </tbody>
         </table>
       </div>
-    </div>
+    </>
   );
 }
 

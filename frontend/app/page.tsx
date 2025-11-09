@@ -48,13 +48,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <section className="space-y-6">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-100">Live Spot Prices</h2>
-          <p className="mt-1 text-sm text-slate-400">
-            Aggregated from multiple upstream providers with per-source buy/sell data. Click any row to view price history.
-          </p>
-        </div>
+      <section>
         <LatestPricesTable data={latestPrices} error={latestError as Error | undefined} isLoading={latestLoading} />
       </section>
     </div>

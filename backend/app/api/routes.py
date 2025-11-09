@@ -25,7 +25,7 @@ router = APIRouter(prefix="/v1", tags=["prices"])
 price_tracker = PriceTracker()
 
 
-def _build_latest_response(prices: Dict[str, Dict[str | None, GoldPrice | None]]) -> LatestPricesResponse:
+def _build_latest_response(prices: Dict[str, Dict[str | None, GoldPrice | None]], db: Session = None) -> LatestPricesResponse:
     from decimal import Decimal
     
     # Calculate average prices for each source
@@ -64,6 +64,26 @@ def _build_latest_response(prices: Dict[str, Dict[str | None, GoldPrice | None]]
     sorted_sources = dict(sorted(source_averages.items(), key=lambda x: x[1], reverse=True))
     price_tracker.update(sorted_sources)
     
+    # Get sparkline data and percentage changes for all sources if db is provided
+    sparklines = {}
+    changes_1h = {}
+    changes_24h = {}
+    changes_7d = {}
+    if db:
+        for source in prices.keys():
+            sparkline_data = GoldPrice.get_7day_sparkline(db, source)
+            # Convert IRR to IRT for sparkline data
+            if sparkline_data and prices[source]:
+                first_record = next((r for r in prices[source].values() if r), None)
+                if first_record and first_record.currency == "IRR":
+                    sparkline_data = [price / 10 for price in sparkline_data]
+            sparklines[source] = sparkline_data if sparkline_data else []
+            
+            # Get percentage changes
+            changes_1h[source] = GoldPrice.get_price_change_percentage(db, source, 1)
+            changes_24h[source] = GoldPrice.get_price_change_percentage(db, source, 24)
+            changes_7d[source] = GoldPrice.get_price_change_percentage(db, source, 168)  # 7 days = 168 hours
+    
     # Build response with tracking data
     payload: Dict[str, Dict[str, Optional[GoldPriceOut]]] = {}
     for source, sides in prices.items():
@@ -74,6 +94,10 @@ def _build_latest_response(prices: Dict[str, Dict[str | None, GoldPrice | None]]
                 price_out = GoldPriceOut.from_orm(record)
                 price_out.price_direction = price_tracker.get_price_direction(source)
                 price_out.rank_change = price_tracker.get_rank_change(source)
+                price_out.sparkline_7d = sparklines.get(source, [])
+                price_out.change_1h = changes_1h.get(source)
+                price_out.change_24h = changes_24h.get(source)
+                price_out.change_7d = changes_7d.get(source)
                 payload[source][key] = price_out
             else:
                 payload[source][key] = None
@@ -101,7 +125,7 @@ def get_latest_prices(
     db: Session = Depends(get_db),
 ) -> LatestPricesResponse:
     aggregated = GoldPrice.get_latest_prices_grouped(db)
-    return _build_latest_response(aggregated)
+    return _build_latest_response(aggregated, db)
 
 
 @router.get(
@@ -174,7 +198,7 @@ def telegram_latest_prices(
     db: Session = Depends(get_db),
 ) -> LatestPricesResponse:
     aggregated = GoldPrice.get_latest_prices_grouped(db)
-    return _build_latest_response(aggregated)
+    return _build_latest_response(aggregated, db)
 
 
 @telegram_router.get(

@@ -114,6 +114,58 @@ class GoldPrice(Base):
             .all()
         )
 
+    @classmethod
+    def get_7day_sparkline(cls, session: Session, source: str) -> list[float]:
+        """Get 7-day hourly average prices for sparkline chart."""
+        end_time = datetime.utcnow()
+        start_time = end_time - timedelta(days=7)
+        
+        truncated_dt = func.date_trunc("hour", cls.created_at).label("bucket")
+        
+        rows = (
+            session.query(
+                func.avg(cls.price).label("average_price"),
+            )
+            .filter(cls.source == source)
+            .filter(cls.created_at >= start_time)
+            .filter(cls.created_at <= end_time)
+            .group_by(truncated_dt)
+            .order_by(truncated_dt.asc())
+            .all()
+        )
+        
+        return [float(row.average_price) for row in rows] if rows else []
+
+    @classmethod
+    def get_price_change_percentage(cls, session: Session, source: str, hours: int) -> Optional[float]:
+        """Calculate percentage change for a given time period."""
+        end_time = datetime.utcnow()
+        start_time = end_time - timedelta(hours=hours)
+        
+        # Get current price (most recent)
+        current_record = (
+            session.query(cls.price)
+            .filter(cls.source == source)
+            .order_by(cls.created_at.desc())
+            .limit(1)
+            .scalar()
+        )
+        
+        # Get price from X hours ago
+        old_record = (
+            session.query(cls.price)
+            .filter(cls.source == source)
+            .filter(cls.created_at <= start_time)
+            .order_by(cls.created_at.desc())
+            .limit(1)
+            .scalar()
+        )
+        
+        if current_record and old_record and old_record > 0:
+            return float(((current_record - old_record) / old_record) * 100)
+        
+        return None
+
     def __repr__(self) -> str:
         return (
             f"<GoldPrice price={self.price} source={self.source} "
