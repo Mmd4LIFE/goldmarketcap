@@ -1,22 +1,15 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import useSWR from "swr";
 
 import {
   LatestPricesResponse,
-  PriceHistoryResponse,
   fetchLatestPrices,
-  fetchPriceHistory,
 } from "../lib/api";
 import { LatestPricesTable } from "../components/LatestPricesTable";
-import { PriceHistoryChart } from "../components/PriceHistoryChart";
-
-type HistoryKey = readonly ["price-history", string, "minute" | "hour"];
 
 export default function DashboardPage() {
-  const [selectedSource, setSelectedSource] = useState<string>("milli");
-  const [interval, setInterval] = useState<"minute" | "hour">("hour");
   const [tokenConfigured, setTokenConfigured] = useState(false);
 
   useEffect(() => {
@@ -37,34 +30,6 @@ export default function DashboardPage() {
     refreshInterval: 60_000,
   });
 
-  const historyKey: HistoryKey | null = selectedSource
-    ? ["price-history", selectedSource, interval]
-    : null;
-
-  const historyFetcher = (key: HistoryKey) => {
-    const [, source, bucket] = key;
-    return fetchPriceHistory(source, bucket);
-  };
-
-  const {
-    data: history,
-    error: historyError,
-    isLoading: historyLoading,
-  } = useSWR<PriceHistoryResponse>(
-    historyKey,
-    historyFetcher,
-    {
-      refreshInterval: 60_000,
-    }
-  );
-
-  const sources = useMemo(() => {
-    if (!latestPrices) {
-      return [];
-    }
-    return Object.keys(latestPrices.latest_prices);
-  }, [latestPrices]);
-
   return (
     <div className="space-y-8">
       {!tokenConfigured && (
@@ -84,42 +49,13 @@ export default function DashboardPage() {
       )}
 
       <section className="space-y-6">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h2 className="text-2xl font-bold text-slate-100">Live Spot Prices</h2>
-            <p className="mt-1 text-sm text-slate-400">
-              Aggregated from multiple upstream providers with per-source buy/sell data
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <label htmlFor="source-select" className="text-sm font-medium text-slate-300">
-              Chart Source:
-            </label>
-            <select
-              id="source-select"
-              value={selectedSource}
-              onChange={(event) => setSelectedSource(event.target.value)}
-              className="rounded-lg border border-slate-600 bg-slate-800/80 px-4 py-2 text-sm font-medium text-slate-100 shadow-sm transition-colors hover:bg-slate-700/80 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-            >
-              {sources.map((source) => (
-                <option key={source} value={source}>
-                  {source.toUpperCase()}
-                </option>
-              ))}
-            </select>
-          </div>
+        <div>
+          <h2 className="text-2xl font-bold text-slate-100">Live Spot Prices</h2>
+          <p className="mt-1 text-sm text-slate-400">
+            Aggregated from multiple upstream providers with per-source buy/sell data. Click any row to view price history.
+          </p>
         </div>
         <LatestPricesTable data={latestPrices} error={latestError as Error | undefined} isLoading={latestLoading} />
-      </section>
-
-      <section>
-        <PriceHistoryChart
-          history={history}
-          error={historyError as Error | undefined}
-          isLoading={historyLoading}
-          interval={interval}
-          onIntervalChange={setInterval}
-        />
       </section>
     </div>
   );

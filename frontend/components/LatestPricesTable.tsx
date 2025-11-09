@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { LatestPricesResponse, PriceRecord } from "../lib/api";
 
@@ -66,6 +67,7 @@ function getSourceUrl(source: string): string {
 }
 
 export function LatestPricesTable({ data, isLoading, error }: LatestPricesTableProps) {
+  const router = useRouter();
 
   // Aggregate sources and calculate averages - MUST be before any conditional returns
   const aggregatedSources = useMemo<AggregatedSource[]>(() => {
@@ -189,7 +191,7 @@ export function LatestPricesTable({ data, isLoading, error }: LatestPricesTableP
               <th scope="col" className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider text-slate-300">
                 Rank Δ
               </th>
-              <th scope="col" className="px-3 py-4 text-center text-xs font-bold uppercase tracking-wider text-slate-300">
+              <th scope="col" className="w-16 px-2 py-4 text-center text-xs font-bold uppercase tracking-wider text-slate-300">
                 Rank
               </th>
               <th scope="col" className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-300">
@@ -208,7 +210,11 @@ export function LatestPricesTable({ data, isLoading, error }: LatestPricesTableP
               const rank = index + 1;
               
               return (
-                <tr key={source.source} className="transition-all duration-300 hover:bg-slate-800/30">
+                <tr 
+                  key={source.source} 
+                  onClick={() => router.push(`/chart/${source.source.toLowerCase()}`)}
+                  className="cursor-pointer transition-all duration-300 hover:bg-slate-800/30"
+                >
                   <td className="px-4 py-4 text-center">
                     {source.rankChange > 0 && (
                       <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-2 py-1 text-xs font-bold text-emerald-400">
@@ -228,7 +234,7 @@ export function LatestPricesTable({ data, isLoading, error }: LatestPricesTableP
                     )}
                     {source.rankChange === 0 && <span className="text-slate-600">=</span>}
                   </td>
-                  <td className="px-3 py-4 text-center">
+                  <td className="w-16 px-2 py-4 text-center">
                     <span className="text-lg font-bold text-slate-400">#{rank}</span>
                   </td>
                   <td className="px-6 py-4">
@@ -236,6 +242,7 @@ export function LatestPricesTable({ data, isLoading, error }: LatestPricesTableP
                       href={getSourceUrl(source.source)}
                       target="_blank"
                       rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
                       className="flex items-center gap-3 transition-opacity hover:opacity-70"
                     >
                       <div className="relative h-8 w-8 flex-shrink-0 overflow-hidden rounded-lg bg-white/5 p-1">
@@ -253,7 +260,7 @@ export function LatestPricesTable({ data, isLoading, error }: LatestPricesTableP
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
                       {source.hasSides && (
-                        <div className="group relative">
+                        <div className="group relative" onClick={(e) => e.stopPropagation()}>
                           <svg className="h-5 w-5 cursor-help text-slate-500 hover:text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
