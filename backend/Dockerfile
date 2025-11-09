@@ -12,7 +12,7 @@ RUN pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir -r re
 
 COPY app ./app
 
-EXPOSE 8000
+EXPOSE 8005
 
 CMD ["python", "-m", "app"]
 
