@@ -5,6 +5,10 @@ import { EnvScript } from "./env-script";
 export const metadata = {
   title: "Gold Price Dashboard",
   description: "Real-time gold price monitoring and analytics",
+  icons: {
+    icon: '/favicon.svg',
+    apple: '/favicon.svg',
+  },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
