@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useMemo } from "react";
+import Image from "next/image";
 import { LatestPricesResponse, PriceRecord } from "../lib/api";
 
 interface LatestPricesTableProps {
@@ -23,6 +24,26 @@ interface AggregatedSource {
   timestamp: string;
   priceDirection: "up" | "down" | "none";
   rankChange: number;
+}
+
+// Helper function to get logo path for a source
+function getLogoPath(source: string): string {
+  const logoExtensions: Record<string, string> = {
+    digikala: "svg",
+    talasea: "svg",
+    wallgold: "svg",
+    daric: "png",
+    estjt: "png",
+    goldika: "png",
+    melligold: "png",
+    milli: "png",
+    taline: "png",
+    technogold: "png",
+    tgju: "png",
+  };
+  
+  const ext = logoExtensions[source.toLowerCase()] || "png";
+  return `/logos/${source.toLowerCase()}.${ext}`;
 }
 
 export function LatestPricesTable({ data, isLoading, error }: LatestPricesTableProps) {
@@ -191,7 +212,20 @@ export function LatestPricesTable({ data, isLoading, error }: LatestPricesTableP
                   <td className="px-6 py-4 text-center">
                     <span className="text-lg font-bold text-slate-400">#{rank}</span>
                   </td>
-                  <td className="px-6 py-4 text-sm font-bold uppercase text-emerald-400">{source.source}</td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="relative h-8 w-8 flex-shrink-0 overflow-hidden rounded-lg bg-white/5 p-1">
+                        <Image
+                          src={getLogoPath(source.source)}
+                          alt={`${source.source} logo`}
+                          width={32}
+                          height={32}
+                          className="h-full w-full object-contain"
+                        />
+                      </div>
+                      <span className="text-sm font-bold uppercase text-emerald-400">{source.source}</span>
+                    </div>
+                  </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
                       {source.hasSides && (
