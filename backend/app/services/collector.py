@@ -230,9 +230,10 @@ class GoldPriceCollector:
         return self._build_single(price, "technogold", currency="IRT", divider=Decimal("1000"))
 
     def _process_melligold(self, data: Dict[str, Any]) -> List[PriceRecord]:
+        price_data = data.get("data", {})
         return self._build_dual(
-            data.get("price_buy"),
-            data.get("price_sell"),
+            price_data.get("price_buy"),
+            price_data.get("price_sell"),
             source="melligold",
             currency="IRT",
             divider=Decimal("1000"),
