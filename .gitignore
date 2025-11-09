@@ -69,3 +69,6 @@ frontend/.env
 
 # Archive Folder
 archive/
+
+
+*.sql
