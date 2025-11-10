@@ -142,6 +142,7 @@ class GoldPriceCollector:
             ("daric", lambda: self._fetch_json(client, self.settings.daric_api_url), self._process_daric),
             ("goldika", lambda: self._fetch_json(client, self.settings.goldika_api_url), self._process_goldika),
             ("estjt", lambda: self._fetch_text(client, self.settings.estjt_api_url), self._process_estjt),
+            ("hamrahgold", lambda: self._fetch_text(client, self.settings.hamrahgold_api_url), self._process_hamrahgold),
         ]
 
     def _fetch_tgju(self, client: httpx.AsyncClient):
@@ -273,6 +274,57 @@ class GoldPriceCollector:
                             return self._build_single(candidate, "estjt", currency="IRT", divider=Decimal("1000"))
         logger.warning("Failed to parse ESTJT HTML response")
         return []
+
+    def _process_hamrahgold(self, html: str | None) -> List[PriceRecord]:
+        import json
+        import re
+        import html as html_module
+        
+        if not html:
+            return []
+        
+        try:
+            # Find wire:snapshot JSON in HTML - more flexible pattern
+            pattern = r'wire:snapshot=["\']({[^"\']+})["\']'
+            matches = re.findall(pattern, html, re.DOTALL)
+            
+            for match in matches:
+                try:
+                    # Decode HTML entities properly
+                    json_str = html_module.unescape(match)
+                    data = json.loads(json_str)
+                    
+                    # Look for prices in the data
+                    if "data" in data and "prices" in data["data"]:
+                        prices_array = data["data"]["prices"]
+                        if isinstance(prices_array, list) and len(prices_array) > 0:
+                            # Navigate through nested arrays to find pure gold
+                            for level1 in prices_array:
+                                if isinstance(level1, list):
+                                    for level2 in level1:
+                                        if isinstance(level2, list):
+                                            for item in level2:
+                                                if isinstance(item, dict) and item.get("key") == "pg":
+                                                    # Found pure gold prices
+                                                    buy = item.get("buy")
+                                                    sell = item.get("sell")
+                                                    if buy and sell:
+                                                        logger.info("Found hamrahgold prices: buy=%s, sell=%s", buy, sell)
+                                                        return self._build_dual(
+                                                            buy,
+                                                            sell,
+                                                            source="hamrahgold",
+                                                            currency="IRR",
+                                                            divider=Decimal("1000"),
+                                                        )
+                except json.JSONDecodeError:
+                    continue
+            
+            logger.warning("Failed to find hamrahgold price data in HTML")
+            return []
+        except Exception as e:
+            logger.exception("Error parsing hamrahgold HTML: %s", e)
+            return []
 
     def _build_single(
         self,

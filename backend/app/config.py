@@ -88,6 +88,9 @@ class Settings(BaseSettings):
     estjt_api_url: HttpUrl = Field(
         "https://www.estjt.ir/tv/", env="ESTJT_API_URL"
     )
+    hamrahgold_api_url: HttpUrl = Field(
+        "https://hamrahgold.com/", env="HAMRAHGOLD_API_URL"
+    )
 
     class Config:
         case_sensitive = True

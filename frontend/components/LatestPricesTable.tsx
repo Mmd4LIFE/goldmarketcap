@@ -38,6 +38,7 @@ function getLogoPath(source: string): string {
     digikala: "svg",
     talasea: "svg",
     wallgold: "svg",
+    hamrahgold: "svg",
     daric: "png",
     estjt: "png",
     goldika: "png",
@@ -66,6 +67,7 @@ function getSourceUrl(source: string): string {
     talasea: "https://talasea.ir/",
     daric: "https://daric.gold/",
     melligold: "https://melligold.com/",
+    hamrahgold: "https://hamrahgold.com/",
   };
   
   return urls[source.toLowerCase()] || "#";
