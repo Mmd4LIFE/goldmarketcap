@@ -166,6 +166,101 @@ class GoldPrice(Base):
         
         return None
 
+    @classmethod
+    def get_analytics_stats(cls, session: Session) -> Dict:
+        """Get analytics statistics for the last 24 hours."""
+        end_time = datetime.utcnow()
+        start_time = end_time - timedelta(hours=24)
+        
+        # Get most expensive and cheapest in last 24h
+        most_expensive = (
+            session.query(cls)
+            .filter(cls.created_at >= start_time)
+            .order_by(cls.price.desc())
+            .first()
+        )
+        
+        most_cheapest = (
+            session.query(cls)
+            .filter(cls.created_at >= start_time)
+            .order_by(cls.price.asc())
+            .first()
+        )
+        
+        # Get all sources for average calculation
+        sources_data = cls.get_latest_prices_grouped(session)
+        
+        # Calculate average price from latest prices (one price per source)
+        source_prices = []
+        for source_dict in sources_data.values():
+            # Calculate average for this source (handle buy/sell or default)
+            prices = []
+            for side, price_record in source_dict.items():
+                if price_record:
+                    # Convert IRR to IRT (Rials to Tomans)
+                    price_in_tomans = float(price_record.price) / 10 if price_record.currency == "IRR" else float(price_record.price)
+                    prices.append(price_in_tomans)
+            
+            if prices:
+                # Use average of buy/sell for this source
+                source_prices.append(sum(prices) / len(prices))
+        
+        average_price = sum(source_prices) / len(source_prices) if source_prices else 0
+        
+        # Calculate average price 24h ago (one price per source, in Tomans)
+        old_prices = []
+        for source in sources_data.keys():
+            old_record = (
+                session.query(cls.price, cls.currency)
+                .filter(cls.source == source)
+                .filter(cls.created_at <= start_time)
+                .order_by(cls.created_at.desc())
+                .limit(1)
+                .first()
+            )
+            if old_record:
+                price, currency = old_record
+                price_in_tomans = float(price) / 10 if currency == "IRR" else float(price)
+                old_prices.append(price_in_tomans)
+        
+        average_price_24h_ago = sum(old_prices) / len(old_prices) if old_prices else None
+        average_price_change_24h = None
+        if average_price_24h_ago and average_price_24h_ago > 0:
+            average_price_change_24h = ((average_price - average_price_24h_ago) / average_price_24h_ago) * 100
+        
+        # Find most and least changed sources
+        changes = {}
+        for source in sources_data.keys():
+            change = cls.get_price_change_percentage(session, source, 24)
+            if change is not None:
+                changes[source] = change
+        
+        most_changed = max(changes.items(), key=lambda x: abs(x[1])) if changes else ("N/A", 0.0)
+        least_changed = min(changes.items(), key=lambda x: abs(x[1])) if changes else ("N/A", 0.0)
+        
+        return {
+            "most_expensive_24h": {
+                "source": most_expensive.source if most_expensive else "N/A",
+                "price": str(most_expensive.price) if most_expensive else "0",
+                "timestamp": most_expensive.created_at if most_expensive else datetime.utcnow(),
+            },
+            "most_cheapest_24h": {
+                "source": most_cheapest.source if most_cheapest else "N/A",
+                "price": str(most_cheapest.price) if most_cheapest else "0",
+                "timestamp": most_cheapest.created_at if most_cheapest else datetime.utcnow(),
+            },
+            "average_price": float(average_price),
+            "average_price_change_24h": float(average_price_change_24h) if average_price_change_24h is not None else None,
+            "most_changed_24h": {
+                "source": most_changed[0],
+                "change": float(most_changed[1]),
+            },
+            "least_changed_24h": {
+                "source": least_changed[0],
+                "change": float(least_changed[1]),
+            },
+        }
+
     def __repr__(self) -> str:
         return (
             f"<GoldPrice price={self.price} source={self.source} "

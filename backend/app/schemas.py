@@ -70,3 +70,23 @@ class HealthResponse(BaseModel):
     uptime_seconds: float
     last_collection: Optional[datetime]
 
+
+class SourceWithTime(BaseModel):
+    source: str
+    price: Decimal
+    timestamp: datetime
+
+
+class SourceWithChange(BaseModel):
+    source: str
+    change: float
+
+
+class AnalyticsStats(BaseModel):
+    most_expensive_24h: SourceWithTime
+    most_cheapest_24h: SourceWithTime
+    average_price: float
+    average_price_change_24h: Optional[float]
+    most_changed_24h: SourceWithChange
+    least_changed_24h: SourceWithChange
+

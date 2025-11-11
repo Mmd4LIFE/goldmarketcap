@@ -4,9 +4,12 @@ import { useState, useEffect } from "react";
 import useSWR from "swr";
 
 import {
+  AnalyticsStats,
   LatestPricesResponse,
+  fetchAnalyticsStats,
   fetchLatestPrices,
 } from "../lib/api";
+import { AnalyticsCards } from "../components/AnalyticsCards";
 import { LatestPricesTable } from "../components/LatestPricesTable";
 
 export default function DashboardPage() {
@@ -30,8 +33,16 @@ export default function DashboardPage() {
     refreshInterval: 60_000,
   });
 
+  const {
+    data: analyticsStats,
+    error: analyticsError,
+    isLoading: analyticsLoading,
+  } = useSWR<AnalyticsStats>(["analytics-stats"], () => fetchAnalyticsStats(), {
+    refreshInterval: 60_000,
+  });
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {!tokenConfigured && (
         <div className="rounded-lg border border-amber-500/50 bg-gradient-to-r from-amber-500/10 to-orange-500/10 p-5 shadow-lg">
           <div className="flex items-start gap-3">
@@ -47,6 +58,12 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+
+      <AnalyticsCards 
+        stats={analyticsStats || null} 
+        error={analyticsError as Error | undefined} 
+        isLoading={analyticsLoading} 
+      />
 
       <section>
         <LatestPricesTable data={latestPrices} error={latestError as Error | undefined} isLoading={latestLoading} />

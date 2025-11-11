@@ -11,6 +11,7 @@ from ..dependencies import get_collector
 from ..models import GoldPrice
 from ..schemas import (
     DEFAULT_SIDE_KEY,
+    AnalyticsStats,
     GoldPriceOut,
     HealthResponse,
     LatestPricesResponse,
@@ -126,6 +127,19 @@ def get_latest_prices(
 ) -> LatestPricesResponse:
     aggregated = GoldPrice.get_latest_prices_grouped(db)
     return _build_latest_response(aggregated, db)
+
+
+@router.get(
+    "/analytics/stats",
+    response_model=AnalyticsStats,
+    dependencies=[Depends(api_auth)],
+)
+def get_analytics_stats(
+    db: Session = Depends(get_db),
+) -> AnalyticsStats:
+    """Get analytics statistics including most expensive/cheapest sources in L24h, average price, and price changes."""
+    stats = GoldPrice.get_analytics_stats(db)
+    return AnalyticsStats(**stats)
 
 
 @router.get(
