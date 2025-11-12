@@ -2,42 +2,14 @@
 
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import useSWR from "swr";
 
-import {
-  PriceHistoryResponse,
-  fetchPriceHistory,
-} from "../../../lib/api";
 import { PriceHistoryChart } from "../../../components/PriceHistoryChart";
-
-type HistoryKey = readonly ["price-history", string, "minute" | "hour"];
 
 export default function ChartPage() {
   const params = useParams();
   const router = useRouter();
   const source = params?.source as string;
   const [interval, setInterval] = useState<"minute" | "hour">("hour");
-
-  const historyKey: HistoryKey | null = source
-    ? ["price-history", source, interval]
-    : null;
-
-  const historyFetcher = (key: HistoryKey) => {
-    const [, source, bucket] = key;
-    return fetchPriceHistory(source, bucket);
-  };
-
-  const {
-    data: history,
-    error: historyError,
-    isLoading: historyLoading,
-  } = useSWR<PriceHistoryResponse>(
-    historyKey,
-    historyFetcher,
-    {
-      refreshInterval: 60_000,
-    }
-  );
 
   return (
     <div className="space-y-6">
@@ -53,18 +25,16 @@ export default function ChartPage() {
             Back to Live Prices
           </button>
           <h1 className="text-3xl font-bold text-slate-100">
-            {source?.toUpperCase()} Price History
+            {source?.toUpperCase()} Price Charts
           </h1>
           <p className="mt-2 text-sm text-slate-400">
-            Historical price data and trends
+            Minute-by-minute trends and hourly candlestick analysis
           </p>
         </div>
       </div>
 
       <PriceHistoryChart
-        history={history}
-        error={historyError as Error | undefined}
-        isLoading={historyLoading}
+        source={source}
         interval={interval}
         onIntervalChange={setInterval}
       />

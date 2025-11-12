@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Dict, Optional
 
-from sqlalchemy import Column, DateTime, Integer, Numeric, String, func
+from sqlalchemy import Column, DateTime, Integer, Numeric, String, func, distinct
 from sqlalchemy.orm import Session
 
 from .database import Base
@@ -113,6 +113,135 @@ class GoldPrice(Base):
             .order_by(truncated_dt.asc())
             .all()
         )
+
+    @classmethod
+    def get_minute_history_by_side(
+        cls,
+        session: Session,
+        source: str,
+        start_time: datetime,
+        end_time: datetime,
+    ):
+        """Get minutely history with buy/sell separated for two-sided sources"""
+        truncated_dt = func.date_trunc("minute", cls.created_at).label("bucket")
+        
+        # Query grouped by bucket and side
+        results = (
+            session.query(
+                truncated_dt,
+                cls.side,
+                func.avg(cls.price).label("average_price"),
+            )
+            .filter(cls.source == source)
+            .filter(cls.created_at >= start_time)
+            .filter(cls.created_at <= end_time)
+            .group_by(truncated_dt, cls.side)
+            .order_by(truncated_dt.asc())
+            .all()
+        )
+        
+        return results
+
+    @classmethod
+    def get_hour_candles_by_side(
+        cls,
+        session: Session,
+        source: str,
+        start_time: datetime,
+        end_time: datetime,
+    ):
+        """Get hourly OHLC (candlestick) data, separated by side for two-sided sources"""
+        truncated_dt = func.date_trunc("hour", cls.created_at).label("bucket")
+        
+        # Subquery to get first and last timestamps per bucket and side
+        bucket_times = (
+            session.query(
+                truncated_dt.label("bucket"),
+                cls.side,
+                func.min(cls.created_at).label("first_time"),
+                func.max(cls.created_at).label("last_time"),
+            )
+            .filter(cls.source == source)
+            .filter(cls.created_at >= start_time)
+            .filter(cls.created_at <= end_time)
+            .group_by(truncated_dt, cls.side)
+            .subquery()
+        )
+        
+        # Get all prices with their bucket and side
+        all_prices = (
+            session.query(
+                truncated_dt.label("bucket"),
+                cls.side,
+                cls.created_at,
+                cls.price,
+            )
+            .filter(cls.source == source)
+            .filter(cls.created_at >= start_time)
+            .filter(cls.created_at <= end_time)
+            .subquery()
+        )
+        
+        # Query to calculate OHLC
+        results = (
+            session.query(
+                truncated_dt,
+                cls.side,
+                func.min(cls.price).label("low"),
+                func.max(cls.price).label("high"),
+            )
+            .filter(cls.source == source)
+            .filter(cls.created_at >= start_time)
+            .filter(cls.created_at <= end_time)
+            .group_by(truncated_dt, cls.side)
+            .order_by(truncated_dt.asc())
+            .all()
+        )
+        
+        # Now we need to get open and close prices
+        # Build a dict structure: {(bucket, side): {low, high, open, close}}
+        candles = {}
+        for row in results:
+            bucket, side, low, high = row
+            candles[(bucket, side)] = {"low": low, "high": high}
+        
+        # Get open prices (first in each bucket)
+        for bucket, side in candles.keys():
+            open_price = (
+                session.query(cls.price)
+                .filter(cls.source == source)
+                .filter(func.date_trunc("hour", cls.created_at) == bucket)
+                .filter(cls.side == side if side else cls.side.is_(None))
+                .order_by(cls.created_at.asc())
+                .limit(1)
+                .scalar()
+            )
+            candles[(bucket, side)]["open"] = open_price
+            
+            # Get close price (last in each bucket)
+            close_price = (
+                session.query(cls.price)
+                .filter(cls.source == source)
+                .filter(func.date_trunc("hour", cls.created_at) == bucket)
+                .filter(cls.side == side if side else cls.side.is_(None))
+                .order_by(cls.created_at.desc())
+                .limit(1)
+                .scalar()
+            )
+            candles[(bucket, side)]["close"] = close_price
+        
+        return candles
+
+    @classmethod
+    def check_has_sides(cls, session: Session, source: str) -> bool:
+        """Check if a source has buy/sell sides or is one-sided"""
+        sides = (
+            session.query(distinct(cls.side))
+            .filter(cls.source == source)
+            .all()
+        )
+        # If we have buy or sell side (not just None), it's two-sided
+        return any(side[0] in ("buy", "sell") for side in sides)
 
     @classmethod
     def get_7day_sparkline(cls, session: Session, source: str) -> list[float]:
@@ -238,15 +367,30 @@ class GoldPrice(Base):
         most_changed = max(changes.items(), key=lambda x: abs(x[1])) if changes else ("N/A", 0.0)
         least_changed = min(changes.items(), key=lambda x: abs(x[1])) if changes else ("N/A", 0.0)
         
+        # Convert most expensive and cheapest prices to IRT
+        most_expensive_price = "0"
+        if most_expensive:
+            price = float(most_expensive.price)
+            if most_expensive.currency == "IRR":
+                price = price / 10
+            most_expensive_price = str(price)
+        
+        most_cheapest_price = "0"
+        if most_cheapest:
+            price = float(most_cheapest.price)
+            if most_cheapest.currency == "IRR":
+                price = price / 10
+            most_cheapest_price = str(price)
+        
         return {
             "most_expensive_24h": {
                 "source": most_expensive.source if most_expensive else "N/A",
-                "price": str(most_expensive.price) if most_expensive else "0",
+                "price": most_expensive_price,
                 "timestamp": most_expensive.created_at if most_expensive else datetime.utcnow(),
             },
             "most_cheapest_24h": {
                 "source": most_cheapest.source if most_cheapest else "N/A",
-                "price": str(most_cheapest.price) if most_cheapest else "0",
+                "price": most_cheapest_price,
                 "timestamp": most_cheapest.created_at if most_cheapest else datetime.utcnow(),
             },
             "average_price": float(average_price),

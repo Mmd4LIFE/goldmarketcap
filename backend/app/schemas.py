@@ -57,12 +57,49 @@ class PriceHistoryPoint(BaseModel):
     max_price: Decimal
 
 
+class MinuteHistoryPoint(BaseModel):
+    """Point for minutely chart - supports separate buy/sell or single average"""
+    bucket: datetime
+    average_price: Optional[Decimal] = None  # For one-sided sources
+    buy_price: Optional[Decimal] = None  # For two-sided sources
+    sell_price: Optional[Decimal] = None  # For two-sided sources
+
+
+class HourCandlePoint(BaseModel):
+    """Candlestick data point for hourly chart"""
+    bucket: datetime
+    open: Decimal  # First price in the hour
+    close: Decimal  # Last price in the hour
+    high: Decimal  # Maximum price in the hour
+    low: Decimal  # Minimum price in the hour
+
+
 class PriceHistoryResponse(BaseModel):
     source: str
     interval: str
     start_time: datetime
     end_time: datetime
     points: list[PriceHistoryPoint]
+
+
+class MinuteHistoryResponse(BaseModel):
+    source: str
+    interval: str
+    start_time: datetime
+    end_time: datetime
+    has_sides: bool  # True if source has buy/sell, False if one-sided
+    points: list[MinuteHistoryPoint]
+
+
+class HourCandleResponse(BaseModel):
+    source: str
+    interval: str
+    start_time: datetime
+    end_time: datetime
+    has_sides: bool  # True if source has buy/sell
+    buy_candles: Optional[list[HourCandlePoint]] = None  # For two-sided sources
+    sell_candles: Optional[list[HourCandlePoint]] = None  # For two-sided sources
+    candles: Optional[list[HourCandlePoint]] = None  # For one-sided sources
 
 
 class HealthResponse(BaseModel):

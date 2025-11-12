@@ -23,7 +23,7 @@ export function AnalyticsCards({ stats, isLoading, error }: AnalyticsCardsProps)
     return null;
   }
 
-  const formatPrice = (price: number) => Math.round(price / 10).toLocaleString();
+  const formatPrice = (price: number) => Math.round(price).toLocaleString();
   const formatTime = (timestamp: string) => {
     const date = new Date(timestamp);
     return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });

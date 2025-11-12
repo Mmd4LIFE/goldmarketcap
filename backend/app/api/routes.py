@@ -17,6 +17,10 @@ from ..schemas import (
     LatestPricesResponse,
     PriceHistoryPoint,
     PriceHistoryResponse,
+    MinuteHistoryPoint,
+    MinuteHistoryResponse,
+    HourCandlePoint,
+    HourCandleResponse,
 )
 from ..security import api_auth, telegram_auth
 from ..services.collector import GoldPriceCollector
@@ -198,6 +202,180 @@ def get_price_history(
         end_time=end,
         points=points,
     )
+
+
+@router.get(
+    "/prices/{source}/history/minute",
+    response_model=MinuteHistoryResponse,
+    dependencies=[Depends(api_auth)],
+)
+def get_minute_history(
+    source: str,
+    start: Optional[datetime] = Query(default=None, description="Start timestamp (inclusive) in ISO format"),
+    end: Optional[datetime] = Query(default=None, description="End timestamp (inclusive) in ISO format"),
+    db: Session = Depends(get_db),
+) -> MinuteHistoryResponse:
+    """Get minutely price history - returns buy/sell separately for two-sided sources"""
+    if end is None:
+        end = datetime.utcnow()
+    if start is None:
+        start = end - timedelta(hours=2)
+
+    if start >= end:
+        raise HTTPException(status_code=400, detail="Start must be before end")
+
+    # Get currency for this source (check a recent record)
+    latest_record = GoldPrice.get_latest_price(db, source=source)
+    currency = latest_record.currency if latest_record else "IRR"
+    needs_conversion = currency == "IRR"
+
+    # Check if source has sides
+    has_sides = GoldPrice.check_has_sides(db, source)
+    
+    if has_sides:
+        # Get data separated by side
+        results = GoldPrice.get_minute_history_by_side(db, source, start, end)
+        
+        # Organize by bucket
+        buckets = {}
+        for row in results:
+            bucket, side, avg_price = row
+            if bucket not in buckets:
+                buckets[bucket] = {}
+            buckets[bucket][side or "default"] = avg_price
+        
+        # Convert IRR to IRT only if needed
+        points = []
+        for bucket in sorted(buckets.keys()):
+            sides_data = buckets[bucket]
+            buy_price = sides_data.get("buy")
+            sell_price = sides_data.get("sell")
+            
+            # Convert from IRR to IRT (divide by 10) only if currency is IRR
+            if buy_price and needs_conversion:
+                buy_price = buy_price / 10
+            if sell_price and needs_conversion:
+                sell_price = sell_price / 10
+            
+            points.append(
+                MinuteHistoryPoint(
+                    bucket=bucket,
+                    buy_price=buy_price,
+                    sell_price=sell_price,
+                )
+            )
+    else:
+        # One-sided source - get average only
+        grouped = GoldPrice.get_price_history_grouped(db, source, start, end, "minute")
+        points = [
+            MinuteHistoryPoint(
+                bucket=row.bucket,
+                average_price=row.average_price / 10 if needs_conversion else row.average_price,
+            )
+            for row in grouped
+        ]
+
+    return MinuteHistoryResponse(
+        source=source,
+        interval="minute",
+        start_time=start,
+        end_time=end,
+        has_sides=has_sides,
+        points=points,
+    )
+
+
+@router.get(
+    "/prices/{source}/history/hour/candles",
+    response_model=HourCandleResponse,
+    dependencies=[Depends(api_auth)],
+)
+def get_hour_candles(
+    source: str,
+    start: Optional[datetime] = Query(default=None, description="Start timestamp (inclusive) in ISO format"),
+    end: Optional[datetime] = Query(default=None, description="End timestamp (inclusive) in ISO format"),
+    db: Session = Depends(get_db),
+) -> HourCandleResponse:
+    """Get hourly candlestick data - OHLC format"""
+    if end is None:
+        end = datetime.utcnow()
+    if start is None:
+        start = end - timedelta(hours=24)
+
+    if start >= end:
+        raise HTTPException(status_code=400, detail="Start must be before end")
+
+    # Get currency for this source (check a recent record)
+    latest_record = GoldPrice.get_latest_price(db, source=source)
+    currency = latest_record.currency if latest_record else "IRR"
+    needs_conversion = currency == "IRR"
+
+    # Check if source has sides
+    has_sides = GoldPrice.check_has_sides(db, source)
+    
+    # Get candle data
+    candles_dict = GoldPrice.get_hour_candles_by_side(db, source, start, end)
+    
+    if has_sides:
+        # Separate buy and sell candles
+        buy_candles = []
+        sell_candles = []
+        
+        for (bucket, side), data in candles_dict.items():
+            # Convert IRR to IRT only if needed
+            divisor = 10 if needs_conversion else 1
+            candle = HourCandlePoint(
+                bucket=bucket,
+                open=data["open"] / divisor,
+                close=data["close"] / divisor,
+                high=data["high"] / divisor,
+                low=data["low"] / divisor,
+            )
+            
+            if side == "buy":
+                buy_candles.append(candle)
+            elif side == "sell":
+                sell_candles.append(candle)
+        
+        # Sort by bucket
+        buy_candles.sort(key=lambda x: x.bucket)
+        sell_candles.sort(key=lambda x: x.bucket)
+        
+        return HourCandleResponse(
+            source=source,
+            interval="hour",
+            start_time=start,
+            end_time=end,
+            has_sides=True,
+            buy_candles=buy_candles,
+            sell_candles=sell_candles,
+        )
+    else:
+        # One-sided source
+        candles = []
+        divisor = 10 if needs_conversion else 1
+        for (bucket, side), data in candles_dict.items():
+            candles.append(
+                HourCandlePoint(
+                    bucket=bucket,
+                    open=data["open"] / divisor,
+                    close=data["close"] / divisor,
+                    high=data["high"] / divisor,
+                    low=data["low"] / divisor,
+                )
+            )
+        
+        # Sort by bucket
+        candles.sort(key=lambda x: x.bucket)
+        
+        return HourCandleResponse(
+            source=source,
+            interval="hour",
+            start_time=start,
+            end_time=end,
+            has_sides=False,
+            candles=candles,
+        )
 
 
 telegram_router = APIRouter(prefix="/v1/telegram", tags=["telegram"])
