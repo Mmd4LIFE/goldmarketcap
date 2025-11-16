@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
+import dynamic from "next/dynamic";
 import useSWR from "swr";
 
 import {
@@ -9,8 +10,43 @@ import {
   fetchAnalyticsStats,
   fetchLatestPrices,
 } from "../lib/api";
-import { AnalyticsCards } from "../components/AnalyticsCards";
-import { LatestPricesTable } from "../components/LatestPricesTable";
+
+// Lazy load heavy components to improve FID and LCP
+const AnalyticsCards = dynamic(() => import("../components/AnalyticsCards").then(mod => ({ default: mod.AnalyticsCards })), {
+  loading: () => <AnalyticsCardsSkeleton />,
+  ssr: false,
+});
+
+const LatestPricesTable = dynamic(() => import("../components/LatestPricesTable").then(mod => ({ default: mod.LatestPricesTable })), {
+  loading: () => <TableSkeleton />,
+  ssr: false,
+});
+
+// Skeleton loaders to prevent CLS
+function AnalyticsCardsSkeleton() {
+  return (
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-5 mb-6">
+      {[...Array(5)].map((_, i) => (
+        <div key={i} className="animate-pulse rounded-lg border border-slate-700/50 bg-slate-900/60 p-4 h-32" />
+      ))}
+    </div>
+  );
+}
+
+function TableSkeleton() {
+  return (
+    <div className="rounded-lg border border-slate-700/50 bg-gradient-to-br from-slate-900/90 to-slate-900/50 p-6 shadow-xl">
+      <div className="animate-pulse space-y-4">
+        <div className="h-6 bg-slate-700/50 rounded w-1/4"></div>
+        <div className="space-y-2">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="h-12 bg-slate-800/50 rounded"></div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function DashboardPage() {
   const [tokenConfigured, setTokenConfigured] = useState(false);
@@ -59,14 +95,18 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <AnalyticsCards 
-        stats={analyticsStats || null} 
-        error={analyticsError as Error | undefined} 
-        isLoading={analyticsLoading} 
-      />
+      <Suspense fallback={<AnalyticsCardsSkeleton />}>
+        <AnalyticsCards 
+          stats={analyticsStats || null} 
+          error={analyticsError as Error | undefined} 
+          isLoading={analyticsLoading} 
+        />
+      </Suspense>
 
       <section>
-        <LatestPricesTable data={latestPrices} error={latestError as Error | undefined} isLoading={latestLoading} />
+        <Suspense fallback={<TableSkeleton />}>
+          <LatestPricesTable data={latestPrices} error={latestError as Error | undefined} isLoading={latestLoading} />
+        </Suspense>
       </section>
     </div>
   );

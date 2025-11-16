@@ -280,6 +280,8 @@ export function LatestPricesTable({ data, isLoading, error }: LatestPricesTableP
                         width={24}
                         height={24}
                         className="h-full w-full object-contain"
+                        decoding="async"
+                        unoptimized={getLogoPath(source.source).endsWith('.svg')}
                       />
                     </div>
                     <span className="text-sm font-medium text-slate-300 truncate uppercase">{source.source}</span>
@@ -376,6 +378,8 @@ export function LatestPricesTable({ data, isLoading, error }: LatestPricesTableP
                           width={24}
                           height={24}
                           className="h-full w-full object-contain"
+                          decoding="async"
+                          unoptimized={getLogoPath(source.source).endsWith('.svg')}
                         />
                       </div>
                       <span className="text-sm font-medium text-slate-300 uppercase">{source.source}</span>

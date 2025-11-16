@@ -378,6 +378,243 @@ def get_hour_candles(
         )
 
 
+@router.get(
+    "/prices/{source}/history/day/candles",
+    response_model=HourCandleResponse,
+    dependencies=[Depends(api_auth)],
+)
+def get_day_candles(
+    source: str,
+    start: Optional[datetime] = Query(default=None, description="Start timestamp (inclusive) in ISO format"),
+    end: Optional[datetime] = Query(default=None, description="End timestamp (inclusive) in ISO format"),
+    db: Session = Depends(get_db),
+) -> HourCandleResponse:
+    """Get daily candlestick data - OHLC format"""
+    if end is None:
+        end = datetime.utcnow()
+    if start is None:
+        start = end - timedelta(days=180)
+
+    if start >= end:
+        raise HTTPException(status_code=400, detail="Start must be before end")
+
+    latest_record = GoldPrice.get_latest_price(db, source=source)
+    currency = latest_record.currency if latest_record else "IRR"
+    needs_conversion = currency == "IRR"
+
+    has_sides = GoldPrice.check_has_sides(db, source)
+
+    candles_dict = GoldPrice.get_candles_by_side(db, source, start, end, unit="day")
+
+    if has_sides:
+        buy_candles = []
+        sell_candles = []
+        divisor = 10 if needs_conversion else 1
+        for (bucket, side), data in candles_dict.items():
+            candle = HourCandlePoint(
+                bucket=bucket,
+                open=data["open"] / divisor,
+                close=data["close"] / divisor,
+                high=data["high"] / divisor,
+                low=data["low"] / divisor,
+            )
+            if side == "buy":
+                buy_candles.append(candle)
+            elif side == "sell":
+                sell_candles.append(candle)
+        buy_candles.sort(key=lambda x: x.bucket)
+        sell_candles.sort(key=lambda x: x.bucket)
+        return HourCandleResponse(
+            source=source,
+            interval="day",
+            start_time=start,
+            end_time=end,
+            has_sides=True,
+            buy_candles=buy_candles,
+            sell_candles=sell_candles,
+        )
+    else:
+        candles = []
+        divisor = 10 if needs_conversion else 1
+        for (bucket, side), data in candles_dict.items():
+            candles.append(
+                HourCandlePoint(
+                    bucket=bucket,
+                    open=data["open"] / divisor,
+                    close=data["close"] / divisor,
+                    high=data["high"] / divisor,
+                    low=data["low"] / divisor,
+                )
+            )
+        candles.sort(key=lambda x: x.bucket)
+        return HourCandleResponse(
+            source=source,
+            interval="day",
+            start_time=start,
+            end_time=end,
+            has_sides=False,
+            candles=candles,
+        )
+
+
+@router.get(
+    "/prices/{source}/history/week/candles",
+    response_model=HourCandleResponse,
+    dependencies=[Depends(api_auth)],
+)
+def get_week_candles(
+    source: str,
+    start: Optional[datetime] = Query(default=None, description="Start timestamp (inclusive) in ISO format"),
+    end: Optional[datetime] = Query(default=None, description="End timestamp (inclusive) in ISO format"),
+    db: Session = Depends(get_db),
+) -> HourCandleResponse:
+    """Get weekly candlestick data - OHLC format"""
+    if end is None:
+        end = datetime.utcnow()
+    if start is None:
+        start = end - timedelta(weeks=156)
+
+    if start >= end:
+        raise HTTPException(status_code=400, detail="Start must be before end")
+
+    latest_record = GoldPrice.get_latest_price(db, source=source)
+    currency = latest_record.currency if latest_record else "IRR"
+    needs_conversion = currency == "IRR"
+
+    has_sides = GoldPrice.check_has_sides(db, source)
+
+    candles_dict = GoldPrice.get_candles_by_side(db, source, start, end, unit="week")
+
+    if has_sides:
+        buy_candles = []
+        sell_candles = []
+        divisor = 10 if needs_conversion else 1
+        for (bucket, side), data in candles_dict.items():
+            candle = HourCandlePoint(
+                bucket=bucket,
+                open=data["open"] / divisor,
+                close=data["close"] / divisor,
+                high=data["high"] / divisor,
+                low=data["low"] / divisor,
+            )
+            if side == "buy":
+                buy_candles.append(candle)
+            elif side == "sell":
+                sell_candles.append(candle)
+        buy_candles.sort(key=lambda x: x.bucket)
+        sell_candles.sort(key=lambda x: x.bucket)
+        return HourCandleResponse(
+            source=source,
+            interval="week",
+            start_time=start,
+            end_time=end,
+            has_sides=True,
+            buy_candles=buy_candles,
+            sell_candles=sell_candles,
+        )
+    else:
+        candles = []
+        divisor = 10 if needs_conversion else 1
+        for (bucket, side), data in candles_dict.items():
+            candles.append(
+                HourCandlePoint(
+                    bucket=bucket,
+                    open=data["open"] / divisor,
+                    close=data["close"] / divisor,
+                    high=data["high"] / divisor,
+                    low=data["low"] / divisor,
+                )
+            )
+        candles.sort(key=lambda x: x.bucket)
+        return HourCandleResponse(
+            source=source,
+            interval="week",
+            start_time=start,
+            end_time=end,
+            has_sides=False,
+            candles=candles,
+        )
+
+
+@router.get(
+    "/prices/{source}/history/month/candles",
+    response_model=HourCandleResponse,
+    dependencies=[Depends(api_auth)],
+)
+def get_month_candles(
+    source: str,
+    start: Optional[datetime] = Query(default=None, description="Start timestamp (inclusive) in ISO format"),
+    end: Optional[datetime] = Query(default=None, description="End timestamp (inclusive) in ISO format"),
+    db: Session = Depends(get_db),
+) -> HourCandleResponse:
+    """Get monthly candlestick data - OHLC format"""
+    if end is None:
+        end = datetime.utcnow()
+    if start is None:
+        start = end - timedelta(days=365 * 5)
+
+    if start >= end:
+        raise HTTPException(status_code=400, detail="Start must be before end")
+
+    latest_record = GoldPrice.get_latest_price(db, source=source)
+    currency = latest_record.currency if latest_record else "IRR"
+    needs_conversion = currency == "IRR"
+
+    has_sides = GoldPrice.check_has_sides(db, source)
+
+    candles_dict = GoldPrice.get_candles_by_side(db, source, start, end, unit="month")
+
+    if has_sides:
+        buy_candles = []
+        sell_candles = []
+        divisor = 10 if needs_conversion else 1
+        for (bucket, side), data in candles_dict.items():
+            candle = HourCandlePoint(
+                bucket=bucket,
+                open=data["open"] / divisor,
+                close=data["close"] / divisor,
+                high=data["high"] / divisor,
+                low=data["low"] / divisor,
+            )
+            if side == "buy":
+                buy_candles.append(candle)
+            elif side == "sell":
+                sell_candles.append(candle)
+        buy_candles.sort(key=lambda x: x.bucket)
+        sell_candles.sort(key=lambda x: x.bucket)
+        return HourCandleResponse(
+            source=source,
+            interval="month",
+            start_time=start,
+            end_time=end,
+            has_sides=True,
+            buy_candles=buy_candles,
+            sell_candles=sell_candles,
+        )
+    else:
+        candles = []
+        divisor = 10 if needs_conversion else 1
+        for (bucket, side), data in candles_dict.items():
+            candles.append(
+                HourCandlePoint(
+                    bucket=bucket,
+                    open=data["open"] / divisor,
+                    close=data["close"] / divisor,
+                    high=data["high"] / divisor,
+                    low=data["low"] / divisor,
+                )
+            )
+        candles.sort(key=lambda x: x.bucket)
+        return HourCandleResponse(
+            source=source,
+            interval="month",
+            start_time=start,
+            end_time=end,
+            has_sides=False,
+            candles=candles,
+        )
+
+
 telegram_router = APIRouter(prefix="/v1/telegram", tags=["telegram"])
 
 

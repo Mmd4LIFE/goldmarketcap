@@ -9,6 +9,16 @@ export const metadata = {
     icon: '/favicon.svg',
     apple: '/favicon.svg',
   },
+  other: {
+    'format-detection': 'telephone=no',
+  },
+};
+
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
+  themeColor: '#0f172a',
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
@@ -16,6 +26,18 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="en">
       <head>
         <EnvScript />
+        {/* Preconnect to improve LCP */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
+        {/* Prevent layout shift */}
+        <style dangerouslySetInnerHTML={{
+          __html: `
+            html { scroll-behavior: smooth; }
+            body { overflow-x: hidden; }
+            /* Prevent CLS */
+            [data-loading] { min-height: 200px; }
+          `
+        }} />
       </head>
       <body className="bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100 min-h-screen">
         <header className="border-b border-slate-800/50 bg-slate-950/50 backdrop-blur-sm">

@@ -1,9 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
+import dynamic from "next/dynamic";
 import { useParams, useRouter } from "next/navigation";
 
-import { PriceHistoryChart } from "../../../components/PriceHistoryChart";
+// Lazy load chart component to improve initial page load
+const PriceHistoryChart = dynamic(() => import("../../../components/PriceHistoryChart").then(mod => ({ default: mod.PriceHistoryChart })), {
+  loading: () => (
+    <div className="rounded-lg border border-slate-700/50 bg-gradient-to-br from-slate-900/90 to-slate-900/50 p-6 shadow-xl">
+      <div className="animate-pulse space-y-4">
+        <div className="h-6 bg-slate-700/50 rounded w-1/3"></div>
+        <div className="h-80 bg-slate-800/50 rounded"></div>
+      </div>
+    </div>
+  ),
+  ssr: false,
+});
 
 export default function ChartPage() {
   const params = useParams();
@@ -33,11 +45,20 @@ export default function ChartPage() {
         </div>
       </div>
 
-      <PriceHistoryChart
-        source={source}
-        interval={interval}
-        onIntervalChange={setInterval}
-      />
+      <Suspense fallback={
+        <div className="rounded-lg border border-slate-700/50 bg-gradient-to-br from-slate-900/90 to-slate-900/50 p-6 shadow-xl">
+          <div className="animate-pulse space-y-4">
+            <div className="h-6 bg-slate-700/50 rounded w-1/3"></div>
+            <div className="h-80 bg-slate-800/50 rounded"></div>
+          </div>
+        </div>
+      }>
+        <PriceHistoryChart
+          source={source}
+          interval={interval}
+          onIntervalChange={setInterval}
+        />
+      </Suspense>
     </div>
   );
 }

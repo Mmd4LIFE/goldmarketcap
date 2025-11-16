@@ -233,6 +233,66 @@ class GoldPrice(Base):
         return candles
 
     @classmethod
+    def get_candles_by_side(
+        cls,
+        session: Session,
+        source: str,
+        start_time: datetime,
+        end_time: datetime,
+        unit: str,
+    ):
+        """Get OHLC (candlestick) data grouped by unit: hour, day, week, month."""
+        if unit not in {"hour", "day", "week", "month"}:
+            raise ValueError("unit must be 'hour', 'day', 'week', or 'month'")
+        truncated_dt = func.date_trunc(unit, cls.created_at).label("bucket")
+
+        # Query to calculate high/low per bucket and side
+        results = (
+            session.query(
+                truncated_dt,
+                cls.side,
+                func.min(cls.price).label("low"),
+                func.max(cls.price).label("high"),
+            )
+            .filter(cls.source == source)
+            .filter(cls.created_at >= start_time)
+            .filter(cls.created_at <= end_time)
+            .group_by(truncated_dt, cls.side)
+            .order_by(truncated_dt.asc())
+            .all()
+        )
+
+        # Build dict structure and then fill open/close
+        candles: Dict = {}
+        for row in results:
+            bucket, side, low, high = row
+            candles[(bucket, side)] = {"low": low, "high": high}
+
+        for bucket, side in list(candles.keys()):
+            open_price = (
+                session.query(cls.price)
+                .filter(cls.source == source)
+                .filter(func.date_trunc(unit, cls.created_at) == bucket)
+                .filter(cls.side == side if side else cls.side.is_(None))
+                .order_by(cls.created_at.asc())
+                .limit(1)
+                .scalar()
+            )
+            close_price = (
+                session.query(cls.price)
+                .filter(cls.source == source)
+                .filter(func.date_trunc(unit, cls.created_at) == bucket)
+                .filter(cls.side == side if side else cls.side.is_(None))
+                .order_by(cls.created_at.desc())
+                .limit(1)
+                .scalar()
+            )
+            candles[(bucket, side)]["open"] = open_price
+            candles[(bucket, side)]["close"] = close_price
+
+        return candles
+
+    @classmethod
     def check_has_sides(cls, session: Session, source: str) -> bool:
         """Check if a source has buy/sell sides or is one-sided"""
         sides = (

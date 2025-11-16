@@ -7,13 +7,31 @@
 }
 
 @layer base {
+  html {
+    @apply scroll-smooth;
+  }
+  
   html,
   body {
     @apply m-0 p-0 font-sans text-slate-50 bg-slate-950;
+    /* Prevent layout shift */
+    overflow-x: hidden;
   }
 
   a {
     @apply text-inherit no-underline;
+  }
+  
+  /* Optimize font rendering */
+  * {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
+  /* Prevent CLS for images */
+  img {
+    height: auto;
+    max-width: 100%;
   }
 }
 
