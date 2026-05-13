@@ -162,7 +162,7 @@ class GoldPriceCollector:
         return _fetch
 
     def _fetch_digikala(self, client: httpx.AsyncClient):
-        """Digikala CDN sometimes throttles or blocks non-browser clients; use explicit headers."""
+        """Digikala often returns 403 without a site Referer/Origin (WAF treats bare API clients as bots)."""
 
         url = str(self.settings.digikala_api_url)
         headers = {
@@ -172,6 +172,11 @@ class GoldPriceCollector:
             ),
             "Accept": "application/json, text/plain, */*",
             "Accept-Language": "fa-IR,fa;q=0.9,en;q=0.8",
+            "Referer": "https://www.digikala.com/",
+            "Origin": "https://www.digikala.com",
+            "Sec-Fetch-Dest": "empty",
+            "Sec-Fetch-Mode": "cors",
+            "Sec-Fetch-Site": "same-site",
         }
 
         async def _fetch():
