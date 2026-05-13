@@ -133,7 +133,7 @@ class GoldPriceCollector:
         return [
             ("milli", lambda: self._fetch_json(client, self.settings.milli_api_url), self._process_milli),
             ("taline", lambda: self._fetch_json(client, self.settings.taline_api_url), self._process_taline),
-            ("digikala", lambda: self._fetch_json(client, self.settings.digikala_api_url), self._process_digikala),
+            ("digikala", self._fetch_digikala(client), self._process_digikala),
             ("talasea", lambda: self._fetch_json(client, self.settings.talasea_api_url), self._process_talasea),
             ("tgju", self._fetch_tgju(client), self._process_tgju),
             ("wallgold", lambda: self._fetch_json(client, self.settings.wallgold_api_url), self._process_wallgold),
@@ -151,6 +151,24 @@ class GoldPriceCollector:
             if self.settings.tgju_api_token:
                 headers["Authorization"] = f"Bearer {self.settings.tgju_api_token}"
             return await self._fetch_json(client, self.settings.tgju_api_url, headers=headers)
+
+        return _fetch
+
+    def _fetch_digikala(self, client: httpx.AsyncClient):
+        """Digikala CDN sometimes throttles or blocks non-browser clients; use explicit headers."""
+
+        url = str(self.settings.digikala_api_url)
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            ),
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "fa-IR,fa;q=0.9,en;q=0.8",
+        }
+
+        async def _fetch():
+            return await self._fetch_json(client, url, headers=headers)
 
         return _fetch
 
@@ -199,9 +217,24 @@ class GoldPriceCollector:
         return records
 
     def _process_digikala(self, data: Dict[str, Any]) -> List[PriceRecord]:
-        price = data.get("gold18", {}).get("price")
+        if not isinstance(data, dict):
+            logger.warning("Digikala: expected JSON object, got %s", type(data).__name__)
+            return []
+        root = data.get("data")
+        if not isinstance(root, dict):
+            root = data
+        gold = root.get("gold18")
+        if isinstance(gold, dict):
+            price = gold.get("price")
+        else:
+            price = gold
+        if price is None:
+            logger.warning(
+                "Digikala: missing gold18 price (top-level keys=%s, root keys=%s)",
+                list(data.keys())[:15],
+                list(root.keys())[:15] if isinstance(root, dict) else root,
+            )
         return self._build_single(price, "digikala", currency="IRR")
-   
 
     def _process_talasea(self, data: Dict[str, Any]) -> List[PriceRecord]:
         return self._build_single(data.get("price"), "talasea", currency="IRT")
