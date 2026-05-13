@@ -1,0 +1,26 @@
+# Backend only — connects to PostgreSQL running on your machine (not in Docker).
+#
+# 1. On the host, create DB and role if needed, e.g.:
+#    createuser -P gold_user
+#    createdb -O gold_user gold_price
+# 2. Ensure Postgres listens on a port the container can reach (default 5432).
+# 3. Set LOCAL_DATABASE_URL in .env if your host/user/password/port differ.
+#    Example: postgresql+psycopg://gold_user:secret@host.docker.internal:5432/gold_price
+# 4. Run: docker compose -f docker-compose.backend-local.yml up --build
+#
+# host.docker.internal works on Linux with extra_hosts: host-gateway (Compose v2).
+
+services:
+  backend:
+    build:
+      context: ./backend
+    image: gold-price-backend
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    environment:
+      DATABASE_URL: ${LOCAL_DATABASE_URL}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8000:8000"
