@@ -199,8 +199,9 @@ class GoldPriceCollector:
         return records
 
     def _process_digikala(self, data: Dict[str, Any]) -> List[PriceRecord]:
-        prices = data.get("gold18", {})
-        return self._build_single(prices.get("price"), "digikala", currency="IRR")
+        price = data.get("gold18", {}).get("price")
+        return self._build_single(price, "digikala", currency="IRR")
+   
 
     def _process_talasea(self, data: Dict[str, Any]) -> List[PriceRecord]:
         return self._build_single(data.get("price"), "talasea", currency="IRT")
