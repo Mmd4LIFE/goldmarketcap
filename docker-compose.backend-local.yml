@@ -20,6 +20,9 @@ services:
       - ./.env
     environment:
       DATABASE_URL: ${LOCAL_DATABASE_URL}
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:

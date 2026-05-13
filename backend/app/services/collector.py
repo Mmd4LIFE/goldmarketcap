@@ -28,6 +28,13 @@ class PriceRecord:
 class GoldPriceCollector:
     """Collect gold prices from multiple upstream providers on a schedule."""
 
+    _TRANSIENT_HTTP_ERRORS = (
+        httpx.ConnectError,
+        httpx.ConnectTimeout,
+        httpx.ReadTimeout,
+        httpx.WriteTimeout,
+    )
+
     def __init__(self) -> None:
         self.settings = get_settings()
         self._running = False
@@ -178,13 +185,33 @@ class GoldPriceCollector:
         url: str,
         headers: Optional[Dict[str, str]] = None,
     ) -> Optional[Dict[str, Any]]:
-        try:
-            response = await client.get(url, headers=headers)
-            response.raise_for_status()
-            return response.json()
-        except Exception:
-            logger.exception("Error fetching JSON from %s", url)
-            return None
+        max_attempts = 3
+        for attempt in range(1, max_attempts + 1):
+            try:
+                response = await client.get(url, headers=headers)
+                response.raise_for_status()
+                return response.json()
+            except self._TRANSIENT_HTTP_ERRORS as exc:
+                if attempt == max_attempts:
+                    logger.error(
+                        "Failed to fetch JSON from %s after %s attempts: %s",
+                        url,
+                        max_attempts,
+                        exc,
+                    )
+                    return None
+                logger.warning(
+                    "Transient HTTP error (attempt %s/%s) fetching JSON from %s: %s",
+                    attempt,
+                    max_attempts,
+                    url,
+                    exc,
+                )
+                await asyncio.sleep(0.5 * attempt)
+            except Exception:
+                logger.exception("Error fetching JSON from %s", url)
+                return None
+        return None
 
     async def _fetch_text(
         self,
@@ -192,13 +219,33 @@ class GoldPriceCollector:
         url: str,
         headers: Optional[Dict[str, str]] = None,
     ) -> Optional[str]:
-        try:
-            response = await client.get(url, headers=headers)
-            response.raise_for_status()
-            return response.text
-        except Exception:
-            logger.exception("Error fetching HTML from %s", url)
-            return None
+        max_attempts = 3
+        for attempt in range(1, max_attempts + 1):
+            try:
+                response = await client.get(url, headers=headers)
+                response.raise_for_status()
+                return response.text
+            except self._TRANSIENT_HTTP_ERRORS as exc:
+                if attempt == max_attempts:
+                    logger.error(
+                        "Failed to fetch HTML from %s after %s attempts: %s",
+                        url,
+                        max_attempts,
+                        exc,
+                    )
+                    return None
+                logger.warning(
+                    "Transient HTTP error (attempt %s/%s) fetching HTML from %s: %s",
+                    attempt,
+                    max_attempts,
+                    url,
+                    exc,
+                )
+                await asyncio.sleep(0.5 * attempt)
+            except Exception:
+                logger.exception("Error fetching HTML from %s", url)
+                return None
+        return None
 
     def _process_milli(self, data: Dict[str, Any]) -> List[PriceRecord]:
         price_info = data.get("data", data)

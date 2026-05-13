@@ -22,6 +22,10 @@ services:
       - ./.env
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://gold_user:gold_password@postgres:5432/gold_price}
+    # Avoid "Temporary failure in name resolution" inside the container when host/VPN DNS is flaky.
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     depends_on:
       - postgres
     ports:
