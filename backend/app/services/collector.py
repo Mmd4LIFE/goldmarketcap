@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import urlparse
 
 import httpx
 from sqlalchemy.orm import Session
@@ -196,9 +197,106 @@ class GoldPriceCollector:
         }
 
         async def _fetch():
-            return await self._fetch_text(client, url, headers=headers)
+            html = await self._fetch_text(client, url, headers=headers)
+            if html:
+                return html
+            logger.warning("ESTJT: primary fetch failed, trying direct DNS resolver bypass")
+            return await self._fetch_estjt_html_fallback(url, headers)
 
         return _fetch
+
+    def _resolve_a_via_nameservers(self, hostname: str, nameservers: List[str]) -> Optional[str]:
+        """Resolve A record via UDP to specific nameservers (bypasses broken container /etc/resolv.conf)."""
+        try:
+            import dns.resolver
+        except ImportError:
+            logger.warning("ESTJT DNS fallback requires dnspython")
+            return None
+
+        for ns in nameservers:
+            resolver = dns.resolver.Resolver(configure=False)
+            resolver.nameservers = [ns]
+            resolver.port = 53
+            resolver.timeout = 4.0
+            resolver.lifetime = 4.0
+            try:
+                answer = resolver.resolve(hostname, "A")
+                if answer:
+                    return str(answer[0])
+            except Exception as exc:
+                logger.debug("ESTJT A lookup via %s failed: %s", ns, exc)
+                continue
+        return None
+
+    def _https_get_ipv4_tls_sync(
+        self,
+        tls_server_hostname: str,
+        connect_ip: str,
+        path_q: str,
+        headers: Dict[str, str],
+        timeout: float,
+    ) -> Optional[str]:
+        import http.client
+        import ssl
+
+        hdrs = dict(headers)
+        hdrs["Host"] = tls_server_hostname
+        ctx = ssl.create_default_context()
+        conn = http.client.HTTPSConnection(
+            connect_ip,
+            443,
+            timeout=timeout,
+            context=ctx,
+            server_hostname=tls_server_hostname,
+        )
+        try:
+            conn.request("GET", path_q or "/", headers=hdrs)
+            resp = conn.getresponse()
+            if resp.status >= 400:
+                logger.warning("ESTJT fallback HTTPS status=%s for host %s", resp.status, tls_server_hostname)
+                return None
+            return resp.read().decode("utf-8", errors="replace")
+        finally:
+            conn.close()
+
+    async def _fetch_estjt_html_fallback(self, url: str, headers: Dict[str, str]) -> Optional[str]:
+        parsed = urlparse(url)
+        host = parsed.hostname
+        if not host:
+            return None
+        path_q = parsed.path or "/"
+        if parsed.query:
+            path_q = f"{path_q}?{parsed.query}"
+
+        nameservers = [
+            ns.strip()
+            for ns in self.settings.estjt_dns_fallback_nameservers.split(",")
+            if ns.strip()
+        ]
+        loop = asyncio.get_running_loop()
+        ip = await loop.run_in_executor(
+            None,
+            lambda: self._resolve_a_via_nameservers(host, nameservers),
+        )
+        if not ip:
+            logger.warning("ESTJT: DNS fallback could not resolve %s via %s", host, nameservers)
+            return None
+
+        logger.info("ESTJT: fetching via %s (TLS SNI %s) after resolver bypass", ip, host)
+        try:
+            return await loop.run_in_executor(
+                None,
+                lambda: self._https_get_ipv4_tls_sync(
+                    host,
+                    ip,
+                    path_q,
+                    headers,
+                    float(self.settings.http_timeout_seconds),
+                ),
+            )
+        except Exception:
+            logger.exception("ESTJT: fallback HTTPS fetch failed")
+            return None
 
     async def _fetch_json(
         self,

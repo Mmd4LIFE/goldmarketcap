@@ -88,6 +88,11 @@ class Settings(BaseSettings):
     estjt_api_url: HttpUrl = Field(
         "https://www.estjt.ir/", env="ESTJT_API_URL"
     )
+    estjt_dns_fallback_nameservers: str = Field(
+        "1.1.1.1,8.8.8.8,9.9.9.9",
+        env="ESTJT_DNS_FALLBACK_NAMESERVERS",
+        description="Comma-separated DNS used to resolve ESTJT host when container libc DNS fails (UDP to each).",
+    )
     hamrahgold_api_url: HttpUrl = Field(
         "https://hamrahgold.com/", env="HAMRAHGOLD_API_URL"
     )
