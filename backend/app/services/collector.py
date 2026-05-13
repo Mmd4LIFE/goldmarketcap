@@ -148,7 +148,7 @@ class GoldPriceCollector:
             ("melligold", lambda: self._fetch_json(client, self.settings.melligold_api_url), self._process_melligold),
             ("daric", lambda: self._fetch_json(client, self.settings.daric_api_url), self._process_daric),
             ("goldika", lambda: self._fetch_json(client, self.settings.goldika_api_url), self._process_goldika),
-            ("estjt", lambda: self._fetch_text(client, self.settings.estjt_api_url), self._process_estjt),
+            ("estjt", self._fetch_estjt(client), self._process_estjt),
             ("hamrahgold", lambda: self._fetch_text(client, self.settings.hamrahgold_api_url), self._process_hamrahgold),
         ]
 
@@ -181,6 +181,22 @@ class GoldPriceCollector:
 
         async def _fetch():
             return await self._fetch_json(client, url, headers=headers)
+
+        return _fetch
+
+    def _fetch_estjt(self, client: httpx.AsyncClient):
+        url = str(self.settings.estjt_api_url)
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            ),
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "fa-IR,fa;q=0.9,en;q=0.8",
+        }
+
+        async def _fetch():
+            return await self._fetch_text(client, url, headers=headers)
 
         return _fetch
 
@@ -346,20 +362,62 @@ class GoldPriceCollector:
             divider=Decimal("1000"),
         )
 
+    _ESTJT_XPATH_PRIMARY = (
+        '//*[@id="topsec"]/div/div/div[2]/div[3]/div[1]/div/div/table/tbody/tr[3]/td[2]'
+    )
+    _ESTJT_XPATH_NO_TBODY = (
+        '//*[@id="topsec"]/div/div/div[2]/div[3]/div[1]/div/div/table/tr[3]/td[2]'
+    )
+    _ESTJT_XPATH_GOLD_TABLE = (
+        '//*[@id="topsec"]//div[contains(@class,"instant-price-gold")]//table//tr[3]/td[2]'
+    )
+
+    def _estjt_normalize_price_text(self, raw: str) -> str:
+        """Persian/Arabic digits and Iranian-style thousands separators → plain ASCII integer string."""
+        trans = str.maketrans(
+            "۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩",
+            "01234567890123456789",
+        )
+        s = raw.translate(trans)
+        for ch in ("\u00a0", " ", ",", "٫", "،", ".", "'", "\u200c"):
+            s = s.replace(ch, "")
+        return s.strip()
+
     def _process_estjt(self, html: str | None) -> List[PriceRecord]:
         if not html:
             return []
-        lines = html.splitlines()
-        for idx, line in enumerate(lines):
-            if "طلا ۱۸ عیار" in line:
-                for offset in range(idx, min(idx + 10, len(lines))):
-                    if 'class="amount' in lines[offset]:
-                        if offset + 1 < len(lines):
-                            candidate = lines[offset + 1].strip()
-                            candidate = candidate.split("<")[0].replace(",", "")
-                            return self._build_single(candidate, "estjt", currency="IRT", divider=Decimal("1000"))
-        logger.warning("Failed to parse ESTJT HTML response")
-        return []
+        try:
+            from lxml import html as lhtml
+        except ImportError:
+            logger.warning("ESTJT parsing requires lxml (install lxml)")
+            return []
+
+        try:
+            tree = lhtml.fromstring(html)
+        except Exception:
+            logger.exception("ESTJT: failed to parse HTML")
+            return []
+
+        candidates: List[str] = []
+        for xp in (
+            self._ESTJT_XPATH_PRIMARY,
+            self._ESTJT_XPATH_NO_TBODY,
+            self._ESTJT_XPATH_GOLD_TABLE,
+        ):
+            nodes = tree.xpath(xp)
+            if not nodes:
+                continue
+            text = nodes[0].text_content() if hasattr(nodes[0], "text_content") else str(nodes[0])
+            normalized = self._estjt_normalize_price_text(text)
+            if normalized:
+                candidates.append(normalized)
+                break
+
+        if not candidates:
+            logger.warning("ESTJT: no price cell matched XPath (layout may have changed)")
+            return []
+
+        return self._build_single(candidates[0], "estjt", currency="IRT", divider=Decimal("1000"))
 
     def _process_hamrahgold(self, html: str | None) -> List[PriceRecord]:
         import json

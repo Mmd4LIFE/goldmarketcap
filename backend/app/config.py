@@ -86,7 +86,7 @@ class Settings(BaseSettings):
         "https://goldika.ir/api/public/price", env="GOLDIKA_API_URL"
     )
     estjt_api_url: HttpUrl = Field(
-        "https://www.estjt.ir/tv/", env="ESTJT_API_URL"
+        "https://www.estjt.ir/", env="ESTJT_API_URL"
     )
     hamrahgold_api_url: HttpUrl = Field(
         "https://hamrahgold.com/", env="HAMRAHGOLD_API_URL"
