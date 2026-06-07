@@ -2,6 +2,10 @@ import "./globals.css";
 import { ReactNode } from "react";
 import { EnvScript } from "./env-script";
 
+// Render at request time so EnvScript reads real runtime env (API_TOKEN /
+// API_BASE_URL) rather than baking build-time values into a static page.
+export const dynamic = "force-dynamic";
+
 export const metadata = {
   title: "Gold Price Dashboard",
   description: "Real-time gold price monitoring and analytics",

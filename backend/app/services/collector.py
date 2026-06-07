@@ -67,7 +67,9 @@ class GoldPriceCollector:
 
     async def _run_loop(self) -> None:
         interval = self.settings.collector_interval_seconds
-        async with httpx.AsyncClient(timeout=self.settings.http_timeout_seconds) as client:
+        async with httpx.AsyncClient(
+            timeout=self.settings.http_timeout_seconds, follow_redirects=True
+        ) as client:
             while self._running:
                 started_at = datetime.utcnow()
                 try:
@@ -83,7 +85,9 @@ class GoldPriceCollector:
     async def collect_once(self, client: httpx.AsyncClient | None = None) -> bool:
         close_client = False
         if client is None:
-            client = httpx.AsyncClient(timeout=self.settings.http_timeout_seconds)
+            client = httpx.AsyncClient(
+                timeout=self.settings.http_timeout_seconds, follow_redirects=True
+            )
             close_client = True
 
         all_records: List[PriceRecord] = []
@@ -147,6 +151,7 @@ class GoldPriceCollector:
             ("wallgold", lambda: self._fetch_json(client, self.settings.wallgold_api_url), self._process_wallgold),
             ("technogold", lambda: self._fetch_json(client, self.settings.technogold_api_url), self._process_technogold),
             ("melligold", lambda: self._fetch_json(client, self.settings.melligold_api_url), self._process_melligold),
+            ("invi", self._fetch_invi(client), self._process_invi),
             ("daric", lambda: self._fetch_json(client, self.settings.daric_api_url), self._process_daric),
             ("goldika", lambda: self._fetch_json(client, self.settings.goldika_api_url), self._process_goldika),
             ("estjt", self._fetch_estjt(client), self._process_estjt),
@@ -159,6 +164,18 @@ class GoldPriceCollector:
             if self.settings.tgju_api_token:
                 headers["Authorization"] = f"Bearer {self.settings.tgju_api_token}"
             return await self._fetch_json(client, self.settings.tgju_api_url, headers=headers)
+
+        return _fetch
+
+    def _fetch_invi(self, client: httpx.AsyncClient):
+        """invi's apigw rejects requests without a Client-Id header ("invalid client_id"); 3 = web client."""
+
+        async def _fetch():
+            headers = {
+                "Client-Id": self.settings.invi_client_id,
+                "Accept": "application/json",
+            }
+            return await self._fetch_json(client, self.settings.invi_api_url, headers=headers)
 
         return _fetch
 
@@ -439,6 +456,12 @@ class GoldPriceCollector:
             currency="IRT",
             divider=Decimal("1000"),
         )
+
+    def _process_invi(self, data: Dict[str, Any]) -> List[PriceRecord]:
+        result = data.get("result", {})
+        entry = result.get(self.settings.invi_symbol, {}) if isinstance(result, dict) else {}
+        value = entry.get("current_price") if isinstance(entry, dict) else None
+        return self._build_single(value, "invi", currency="IRR")
 
     def _process_daric(self, data: Dict[str, Any]) -> List[PriceRecord]:
         payload = data.get("Data", {})

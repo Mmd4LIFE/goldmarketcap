@@ -75,9 +75,15 @@ class Settings(BaseSettings):
         env="TECHNOGOLD_API_URL",
     )
     melligold_api_url: HttpUrl = Field(
-        "https://melligold.com/api/v1/exchange/buy-sell-price/",
+        "https://melligold.com/api/v1/exchange/buy-sell-price/?symbol=XAU18&format=json",
         env="MELLIGOLD_API_URL",
     )
+    invi_api_url: HttpUrl = Field(
+        "https://invi.ir/apigw/v1/summary-all",
+        env="INVI_API_URL",
+    )
+    invi_client_id: str = Field("3", env="INVI_CLIENT_ID")
+    invi_symbol: str = Field("GOLD-IRR", env="INVI_SYMBOL")
     daric_api_url: HttpUrl = Field(
         "https://apisc.daric.gold/loan/api/v1/User/Collateral/GetGoldlPrice",
         env="DARIC_API_URL",

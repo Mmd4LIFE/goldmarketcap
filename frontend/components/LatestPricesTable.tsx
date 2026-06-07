@@ -43,6 +43,7 @@ function getLogoPath(source: string): string {
     estjt: "png",
     goldika: "png",
     melligold: "png",
+    invi: "png",
     milli: "png",
     taline: "png",
     technogold: "png",
@@ -67,6 +68,7 @@ function getSourceUrl(source: string): string {
     talasea: "https://talasea.ir/",
     daric: "https://daric.gold/",
     melligold: "https://melligold.com/",
+    invi: "https://invi.ir/",
     hamrahgold: "https://hamrahgold.com/",
   };
   

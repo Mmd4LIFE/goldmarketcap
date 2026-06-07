@@ -67,6 +67,10 @@ Thumbs.db
 backend/.env
 frontend/.env
 
+# The generic Python `lib/` ignore above must not swallow the frontend source dir
+!frontend/lib/
+!frontend/lib/**
+
 # Archive Folder
 archive/
 
