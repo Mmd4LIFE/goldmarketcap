@@ -95,7 +95,9 @@ class Settings(BaseSettings):
         "https://www.estjt.ir/", env="ESTJT_API_URL"
     )
     estjt_dns_fallback_nameservers: str = Field(
-        "1.1.1.1,8.8.8.8,9.9.9.9",
+        # estjt.ir only answers Iranian resolvers; foreign resolvers (1.1.1.1/8.8.8.8)
+        # return SERVFAIL. Shecan first, public DNS kept as last-resort fallback.
+        "178.22.122.100,185.51.200.2,1.1.1.1,8.8.8.8",
         env="ESTJT_DNS_FALLBACK_NAMESERVERS",
         description="Comma-separated DNS used to resolve ESTJT host when container libc DNS fails (UDP to each).",
     )

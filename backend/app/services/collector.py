@@ -254,18 +254,28 @@ class GoldPriceCollector:
         timeout: float,
     ) -> Optional[str]:
         import http.client
+        import socket
         import ssl
 
         hdrs = dict(headers)
         hdrs["Host"] = tls_server_hostname
+        # Force an un-encoded body and a closing connection so the raw socket read is unambiguous.
+        hdrs["Accept-Encoding"] = "identity"
+        hdrs["Connection"] = "close"
+
+        # http.client.HTTPSConnection derives SNI from its host arg, so connecting by IP
+        # would send the wrong SNI (and fail cert validation). Wrap the socket ourselves
+        # with the real hostname as SNI, then drive it via a plain HTTPConnection.
         ctx = ssl.create_default_context()
-        conn = http.client.HTTPSConnection(
-            connect_ip,
-            443,
-            timeout=timeout,
-            context=ctx,
-            server_hostname=tls_server_hostname,
-        )
+        raw_sock = socket.create_connection((connect_ip, 443), timeout=timeout)
+        try:
+            tls_sock = ctx.wrap_socket(raw_sock, server_hostname=tls_server_hostname)
+        except Exception:
+            raw_sock.close()
+            raise
+
+        conn = http.client.HTTPConnection(connect_ip, 443, timeout=timeout)
+        conn.sock = tls_sock
         try:
             conn.request("GET", path_q or "/", headers=hdrs)
             resp = conn.getresponse()
