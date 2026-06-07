@@ -62,11 +62,12 @@ class Settings(BaseSettings):
     talasea_api_url: HttpUrl = Field(
         "https://api.talasea.ir/api/market/getGoldPrice", env="TALASEA_API_URL"
     )
-    tgju_api_url: HttpUrl = Field(
-        "https://studio.persianapi.com/index.php/web-service/common/gold-currency-coin?format=json&limit=30&page=1",
-        env="TGJU_API_URL",
+    # tgju is scraped from the public geram18 profile page (the old persianapi.com
+    # API required a paid token). The price cell is read by XPath in the collector.
+    tgju_url: HttpUrl = Field(
+        "https://www.tgju.org/profile/geram18",
+        env="TGJU_URL",
     )
-    tgju_api_token: Optional[str] = Field(None, env="TGJU_API_TOKEN")
     wallgold_api_url: HttpUrl = Field(
         "https://api.wallgold.ir/api/v1/markets", env="WALLGOLD_API_URL"
     )

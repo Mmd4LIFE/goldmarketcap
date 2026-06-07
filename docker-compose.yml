@@ -27,6 +27,14 @@ services:
       - 127.0.0.11
       - 1.1.1.1
       - 8.8.8.8
+    # api.wallgold.ir is internal-only; public DNS returns a firewalled IP. Pin it to the
+    # internal LB nodes (multiple lines for failover). /etc/hosts takes precedence over `dns:`.
+    extra_hosts:
+      - "api.wallgold.ir:172.16.101.11"
+      - "api.wallgold.ir:172.16.101.12"
+      - "api.wallgold.ir:172.16.101.13"
+      - "api.wallgold.ir:172.16.101.14"
+      - "api.wallgold.ir:172.16.101.15"
     depends_on:
       - postgres
     ports:

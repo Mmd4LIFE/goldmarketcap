@@ -159,11 +159,17 @@ class GoldPriceCollector:
         ]
 
     def _fetch_tgju(self, client: httpx.AsyncClient):
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            ),
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "fa-IR,fa;q=0.9,en;q=0.8",
+        }
+
         async def _fetch():
-            headers = {}
-            if self.settings.tgju_api_token:
-                headers["Authorization"] = f"Bearer {self.settings.tgju_api_token}"
-            return await self._fetch_json(client, self.settings.tgju_api_url, headers=headers)
+            return await self._fetch_text(client, self.settings.tgju_url, headers=headers)
 
         return _fetch
 
@@ -432,17 +438,40 @@ class GoldPriceCollector:
     def _process_talasea(self, data: Dict[str, Any]) -> List[PriceRecord]:
         return self._build_single(data.get("price"), "talasea", currency="IRT")
 
-    def _process_tgju(self, data: Dict[str, Any]) -> List[PriceRecord]:
-        results = data.get("result", [])
-        for item in results:
-            if item.get("category") == "طلا" and "18" in item.get("title", "") and "price" in item:
-                try:
-                    raw = Decimal(str(item["price"]))
-                    adjusted = raw / Decimal("1000")
-                except (InvalidOperation, TypeError, ValueError):
-                    logger.warning("Unable to parse TGJU price %s", item.get("price"))
-                    return []
-                return [PriceRecord(price=adjusted, source="tgju", side=None, currency="IRR")]
+    # Primary: the geram18 profile page's headline price cell. Fallback: the data-col
+    # attribute tgju tags the last-trade value with (resilient to layout reshuffles).
+    _TGJU_XPATH_PRIMARY = (
+        "/html/body/main/div[1]/div[1]/div[1]/div/div[2]/div/h3[1]/span[2]/span[1]"
+    )
+    _TGJU_XPATH_DATA_COL = '//*[@data-col="info.last_trade.PDrCotVal"]'
+
+    def _process_tgju(self, html: str | None) -> List[PriceRecord]:
+        if not html:
+            return []
+        try:
+            from lxml import html as lhtml
+        except ImportError:
+            logger.warning("TGJU parsing requires lxml (install lxml)")
+            return []
+
+        try:
+            tree = lhtml.fromstring(html)
+        except Exception:
+            logger.exception("TGJU: failed to parse HTML")
+            return []
+
+        for xp in (self._TGJU_XPATH_PRIMARY, self._TGJU_XPATH_DATA_COL):
+            nodes = tree.xpath(xp)
+            if not nodes:
+                continue
+            text = nodes[0].text_content() if hasattr(nodes[0], "text_content") else str(nodes[0])
+            normalized = self._normalize_price_text(text)
+            if normalized:
+                # tgju quotes geram18 in rial at full scale (e.g. 182,836,000); /1000 keeps
+                # it on the same IRR scale as the other sources before the IRR->IRT display step.
+                return self._build_single(normalized, "tgju", currency="IRR", divider=Decimal("1000"))
+
+        logger.warning("TGJU: no price cell matched XPath (layout may have changed)")
         return []
 
     def _process_wallgold(self, data: Dict[str, Any]) -> List[PriceRecord]:
@@ -509,7 +538,7 @@ class GoldPriceCollector:
         '//*[@id="topsec"]//div[contains(@class,"instant-price-gold")]//table//tr[3]/td[2]'
     )
 
-    def _estjt_normalize_price_text(self, raw: str) -> str:
+    def _normalize_price_text(self, raw: str) -> str:
         """Persian/Arabic digits and Iranian-style thousands separators → plain ASCII integer string."""
         trans = str.maketrans(
             "۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩",
@@ -545,7 +574,7 @@ class GoldPriceCollector:
             if not nodes:
                 continue
             text = nodes[0].text_content() if hasattr(nodes[0], "text_content") else str(nodes[0])
-            normalized = self._estjt_normalize_price_text(text)
+            normalized = self._normalize_price_text(text)
             if normalized:
                 candidates.append(normalized)
                 break
