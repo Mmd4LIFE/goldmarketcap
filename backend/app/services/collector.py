@@ -454,8 +454,14 @@ class GoldPriceCollector:
         return []
 
     def _process_technogold(self, data: Dict[str, Any]) -> List[PriceRecord]:
-        price = data.get("results", {}).get("price")
-        return self._build_single(price, "technogold", currency="IRT", divider=Decimal("1000"))
+        results = data.get("results", {})
+        return self._build_dual(
+            results.get("buy_price"),
+            results.get("sell_price"),
+            source="technogold",
+            currency="IRT",
+            divider=Decimal("1000"),
+        )
 
     def _process_melligold(self, data: Dict[str, Any]) -> List[PriceRecord]:
         price_data = data.get("data", {})
